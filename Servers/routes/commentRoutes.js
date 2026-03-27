@@ -9,14 +9,16 @@ import {
 
 const router = express.Router();
 
-// Créer un commentaire ou une réponse
+// Créer commentaire
 router.post("/", authMiddleware, createComment);
 
-// Obtenir tous les commentaires d’un article
-router.get("/:articleId", getCommentsByArticle);
-
+// IMPORTANT : ordre
 router.get("/single/:id", getSingleComment);
 
-router.get("/commented" , authMiddleware , getUserCommentedArticles);
+// Articles commentés par user
+router.get("/commented", authMiddleware, getUserCommentedArticles);
+
+// Tous les commentaires d’un article
+router.get("/:articleId", getCommentsByArticle);
 
 export default router;

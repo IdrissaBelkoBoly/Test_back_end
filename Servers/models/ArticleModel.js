@@ -3,22 +3,52 @@ import mongoose from "mongoose";
 const ArticleSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
-    content: { type: String, required: true }, // tu peux renommer "content" → "description" si tu veux
-    price: { type: Number, required: true },
-    image: { type: String }, // optionnel
+
+    description: { type: String, required: true, trim: true }, // 🔥 renommé
+
+    price: { type: Number, required: true, min: 0 },
+
+    image: { type: String },
+
+    media: [
+      {
+        type: String,
+      },
+    ],
+
+    category: {
+      type: String,
+      enum: ["Electronique", "Vêtements", "Meubles", "Autres"],
+      default: "Autres",
+    },
+
+    location: {
+      type: String,
+      default: "Non précisé",
+    },
+
     author: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    transferNumber: { type: String, default: null},
-    transferStatus: {type: String, enum: ["pending", "validated" , "rejected"], default: "pending"},
+
     isSold: { type: Boolean, default: false },
+
     buyer: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
+
+    transferNumber: { type: String, default: null },
+
+    transferStatus: {
+      type: String,
+      enum: ["pending", "validated", "rejected"],
+      default: "pending",
+    },
+
     likes: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -27,21 +57,18 @@ const ArticleSchema = new mongoose.Schema(
     ],
 
     comments: [
-      // ✅ Ajouté ici
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Comment",
       },
     ],
 
-    media: [
-      {
-        type: String, //le nom du fichier image ou video
-      },
-    ],
+    views: {
+      type: Number,
+      default: 0,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
-const Article = mongoose.model("Article", ArticleSchema);
-export default Article;
+export default mongoose.model("Article", ArticleSchema);

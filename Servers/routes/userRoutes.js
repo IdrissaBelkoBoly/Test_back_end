@@ -1,7 +1,7 @@
 import express from "express";
 import User from "../models/UserModel.js";
-
-const router = express.Router(); // ✅ Majuscule
+import authMiddleware from "../middleware/authMiddleware.js";
+import upload from "../middleware/upload.js";
 
 import {
   newUser,
@@ -10,19 +10,28 @@ import {
   getAllUsers,
   getMe,
   getUserArticles,
-  getUserPurchases
+  getUserPurchases,
 } from "../controllers/UserController.js";
-import authMiddleware from "../middleware/authMiddleware.js";
-import upload from "../middleware/upload.js";
 
-// 🔐 Route protégée de test (profil)
-router.get("/profile", authMiddleware, (req, res) => {
-  res.status(200).json({
-    message: "Voici ton profil !",
-    user: req.user,
-  });
-});
+const router = express.Router();
 
+// =========================
+// 🔐 AUTH
+// =========================
+router.post("/register", newUser);
+router.post("/login", loginUser);
+
+// =========================
+// 👤 PROFIL
+// =========================
+
+// Profil connecté
+router.get("/me", authMiddleware, getMe);
+
+// Supprimer compte
+router.delete("/me", authMiddleware, deleteUser);
+
+// Modifier photo profil
 router.put(
   "/profile-picture",
   authMiddleware,
@@ -32,35 +41,29 @@ router.put(
       const profilePicturePath = `/uploads/profile_pictures/${req.file.filename}`;
 
       const user = await User.findByIdAndUpdate(
-        req.user.id,
+        req.user._id,
         { profilePicture: profilePicturePath },
-        { new: true }
+        { new: true },
       );
 
       res.json(user);
     } catch (err) {
-      res.status(500).json({ error: "Erreur lors de la mise à jour." });
+      res.status(500).json({ error: "Erreur serveur" });
     }
-  }
+  },
 );
 
-// Inscription
-router.post("/register", newUser);
+// =========================
+// 📊 USERS
+// =========================
 
-// Connexion
-router.post("/login", loginUser);
+// (optionnel → admin seulement plus tard)
+router.get("/", authMiddleware, getAllUsers);
 
-// Suppression
-router.delete("/:id", deleteUser); // ou tu peux utiliser POST si tu préfères
-
-// Nouvelle route pour récuperer tous les utilisateurs 
-router.get("/",getAllUsers);
-
-// Utilisateurs
-router.get("/", getAllUsers);
-router.get("/me", authMiddleware, getMe); // besoin du token
+// Articles d’un user
 router.get("/:id/articles", getUserArticles);
-router.get("/:id/purchases", getUserPurchases);
 
+// Achats d’un user
+router.get("/:id/purchases", getUserPurchases);
 
 export default router;

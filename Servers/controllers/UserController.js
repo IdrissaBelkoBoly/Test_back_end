@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import UserModel from "../models/UserModel.js"; // Assure-toi que l'extension est correcte (.js)
+import ArticleModel from "../models/ArticleModel.js";
 import bcrypt from 'bcrypt';
 import generateToken from '../Utils/generateToken.js';
 
@@ -87,33 +88,19 @@ const token = generateToken(user._id);
 };
 
 
-export const deleteUser = async (req, res, next) => {
+export const deleteUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const user = await UserModel.findById(req.user._id);
 
-    // 1. Vérifier si l'utilisateur existe
-    const existingUser = await UserModel.findOne({ email });
-
-    if (!existingUser) {
-      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    if (!user) {
+      return res.status(404).json({ message: "Introuvable" });
     }
 
-    //verifier le mot de pass 
-    const isPasswordValid = await bcrypt.compare(password, existingUser.password);
-    if(!isPasswordValid){
-      return res.status(401).json({message: "Mot de passe incorrect"});
-    }
+    await user.deleteOne();
 
-    // 2. Supprimer l'utilisateur
-    const deletedUser = await UserModel.deleteOne({ email });
-
-    res.status(200).json({
-      message: "Utilisateur supprimé avec succès",
-      result: deletedUser,
-    });
+    res.json({ message: "Compte supprimé" });
   } catch (error) {
-    console.log("Erreur lors de la suppression :", error);
-    res.status(500).json({ error: "Erreur interne du serveur" });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 

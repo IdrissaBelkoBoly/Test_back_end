@@ -2,12 +2,23 @@ import Comment from "../models/CommentModel.js";
 import ArticleModel from "../models/ArticleModel.js";
 import NotificationModel from "../models/NotificationModel.js";
 
-
+// =========================
+// ✍️ CRÉER COMMENTAIRE
+// =========================
 export const createComment = async (req, res) => {
   try {
-    console.log("🔥 Route POST /api/comments appelée");
     const { articleId, content, parentId = null } = req.body;
-    console.log("📝 Données reçues :", { articleId, content, parentId });
+
+    // ✅ Vérification des champs
+    if (!articleId || !content) {
+      return res.status(400).json({ message: "Champs requis" });
+    }
+
+    // ✅ Vérifier que l'article existe
+    const article = await ArticleModel.findById(articleId);
+    if (!article) {
+      return res.status(404).json({ message: "Article introuvable" });
+    }
 
     const senderName = req.user.username || req.user.name || "Utilisateur";
 
@@ -21,10 +32,11 @@ export const createComment = async (req, res) => {
 
     const savedComment = await comment.save();
 
-    // 2️⃣ On récupère l'instance Socket.IO
     const io = req.app.get("io");
 
-    // 3️⃣ Notification si c’est une réponse à un commentaire
+    // =========================
+    // 🔔 NOTIFICATION RÉPONSE
+    // =========================
     if (parentId) {
       const parentComment = await Comment.findById(parentId).populate("author");
 
@@ -33,8 +45,8 @@ export const createComment = async (req, res) => {
         parentComment.author._id.toString() !== req.user._id.toString()
       ) {
         const notif = new NotificationModel({
-          user: parentComment.author._id, // celui qui reçoit
-          sender: req.user._id, // celui qui envoie
+          user: parentComment.author._id,
+          sender: req.user._id,
           type: "reply",
           commentId: savedComment._id,
           articleId,
@@ -43,7 +55,6 @@ export const createComment = async (req, res) => {
 
         await notif.save();
 
-        // Envoi en temps réel
         io.to(String(parentComment.author._id)).emit("newNotification", {
           type: "reply",
           message: `${senderName} a répondu à votre commentaire.`,
@@ -52,16 +63,20 @@ export const createComment = async (req, res) => {
         });
       }
     }
-    // 4️⃣ Sinon notification au créateur de l'article
+
+    // =========================
+    // 🔔 NOTIFICATION ARTICLE
+    // =========================
     else {
-      const article = await ArticleModel.findById(articleId).populate("author");
+      const fullArticle =
+        await ArticleModel.findById(articleId).populate("author");
 
       if (
-        article &&
-        article.author._id.toString() !== req.user._id.toString()
+        fullArticle &&
+        fullArticle.author._id.toString() !== req.user._id.toString()
       ) {
         const notif = new NotificationModel({
-          user: article.author._id,
+          user: fullArticle.author._id,
           sender: req.user._id,
           type: "comment",
           commentId: savedComment._id,
@@ -71,7 +86,7 @@ export const createComment = async (req, res) => {
 
         await notif.save();
 
-        io.to(String(article.author._id)).emit("newNotification", {
+        io.to(String(fullArticle.author._id)).emit("newNotification", {
           type: "comment",
           message: `${senderName} a commenté votre article.`,
           articleId,
@@ -80,49 +95,68 @@ export const createComment = async (req, res) => {
       }
     }
 
-    // 5️⃣ On lie le commentaire à l'article
+    // =========================
+    // 🔗 LIER AU ARTICLE
+    // =========================
     await ArticleModel.findByIdAndUpdate(articleId, {
       $push: { comments: savedComment._id },
     });
 
-    res.status(201).json({
-      ...savedComment.toObject(),
-      parentId: parentId || null,
-    });
+    // ✅ Retour optimisé pour frontend
+    const populatedComment = await Comment.findById(savedComment._id).populate(
+      "author",
+      "name email",
+    );
+
+    res.status(201).json(populatedComment);
   } catch (error) {
-    console.error("❌ Erreur createComment :", error.message);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    console.error("Erreur createComment :", error);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// 🔥 Nouveau : récupérer un commentaire spécifique
+// =========================
+// 📄 UN SEUL COMMENTAIRE
+// =========================
 export const getSingleComment = async (req, res) => {
   try {
     const comment = await Comment.findById(req.params.id)
-      .populate("author", "email")
+      .populate("author", "email name")
       .populate("articleId", "title");
+
+    if (!comment) {
+      return res.status(404).json({ message: "Commentaire introuvable" });
+    }
+
     res.json(comment);
   } catch (err) {
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
+// =========================
+// 💬 COMMENTAIRES PAR ARTICLE
+// =========================
 export const getCommentsByArticle = async (req, res) => {
   try {
     const comments = await Comment.find({ articleId: req.params.articleId })
-      .populate({path:"author", select:"username email"})
-      .sort({ createdAt: 1 }) // plus anciens en premier pour un ordre logique
+      .populate({ path: "author", select: "name email" })
+      .sort({ createdAt: 1 })
       .lean();
 
-    // Construire un arbre de commentaires
     const map = {};
     const roots = [];
 
     comments.forEach((comment) => {
       comment.replies = [];
-      if(!comment.author){
-        comment.author = { username: "utilisateur inconnu", email: "inconny@example.com"};
+
+      if (!comment.author) {
+        comment.author = {
+          name: "Utilisateur inconnu",
+          email: "inconnu@example.com",
+        };
       }
+
       map[comment._id] = comment;
     });
 
@@ -138,29 +172,27 @@ export const getCommentsByArticle = async (req, res) => {
 
     res.json(roots);
   } catch (err) {
-    console.error("Erreur getCommentsByArticle:", err);
-    res
-      .status(500)
-      .json({ error: "Erreur lors de la récupération des commentaires" });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
+// =========================
+// 👤 ARTICLES COMMENTÉS PAR USER
+// =========================
 export const getUserCommentedArticles = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const comments = await CommentModel.find({ author: userId }).select(
-      "articleId"
-    );
+    const comments = await Comment.find({ author: userId }).select("articleId");
+
     const articleIds = [...new Set(comments.map((c) => c.articleId))];
 
     const articles = await ArticleModel.find({
       _id: { $in: articleIds },
-    }).populate("author", "email");
+    }).populate("author", "name email");
 
-    res.status(200).json(articles);
+    res.json(articles);
   } catch (error) {
-    console.error("Erreur getUserCommentedArticles :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

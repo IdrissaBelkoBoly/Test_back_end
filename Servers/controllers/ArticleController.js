@@ -1,13 +1,13 @@
-import ArticleModel from '../models/ArticleModel.js';
+import ArticleModel from "../models/ArticleModel.js";
 
-// créer un article
+// =========================
+// ✅ CRÉER ARTICLE
+// =========================
 export const createArticle = async (req, res) => {
   try {
-    console.log("Fichier reçu :", req.files); // Ajoute ça tout en haut de createArticle
+    const { title, description, price, category, location } = req.body;
 
-    const { title, content, price } = req.body;
-
-    if (!title || !content || !price) {
+    if (!title || !description || !price) {
       return res.status(400).json({ message: "Champs manquants" });
     }
 
@@ -17,231 +17,221 @@ export const createArticle = async (req, res) => {
 
     const newArticle = new ArticleModel({
       title,
-      content,
+      description,
       price,
+      category,
+      location,
       author: req.user._id,
       media,
     });
 
     const savedArticle = await newArticle.save();
-    res
-      .status(201)
-      .json({ message: "Article créé avec succès", article: savedArticle });
+
+    res.status(201).json(savedArticle);
   } catch (error) {
-    console.error("Erreur lors de la création de l'article :", error);
-    res.status(500).json({ message: "Erreur serveur", error });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// Obtenir tous les articles
+// =========================
+// 🔍 GET ARTICLES (FILTER + SEARCH)
+// =========================
 export const getArticles = async (req, res) => {
   try {
-    const articles = await ArticleModel.find({ isSold: false })
-      .populate("author", "email name")
+    const { category, search } = req.query;
+
+    let filter = { isSold: false };
+
+    if (category) {
+      filter.category = category;
+    }
+
+    if (search) {
+      filter.title = { $regex: search, $options: "i" };
+    }
+
+    const articles = await ArticleModel.find(filter)
+      .populate("author", "name profilePicture")
       .sort({ createdAt: -1 })
       .lean();
 
     articles.forEach((article) => {
-      if (article.media) {
-        if (Array.isArray(article.media)) {
-          // Si c'est déjà un tableau
-          article.media = article.media.map(
-            (m) => `${req.protocol}://${req.get("host")}/${m}`
-          );
-        } else {
-          // Si c'est une seule string → on l’entoure dans un tableau
-          article.media = [`${req.protocol}://${req.get("host")}/${article.media}`];
-        }
-      } else {
-        // Si aucun media → on force un tableau vide
-        article.media = [];
-      }
+      article.media =
+        article.media?.map(
+          (m) => `${req.protocol}://${req.get("host")}/${m}`,
+        ) || [];
     });
 
-    res.status(200).json(articles);
+    res.json(articles);
   } catch (error) {
-    console.error("Erreur lors de la récupération des articles :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-
-
-//Acheter un article 
-export const acheterArticle = async (req, res) => {
-  try {
-    const articleId = req.params.id;
-
-    const article = await ArticleModel.findById(articleId);
-    if (!article) {
-      return res.status(404).json({ message: "Article non trouvé" });
-    }
-
-    if (article.isSold) {
-      return res.status(400).json({ message: "Article déjà vendu" });
-    }
-
-    article.isSold = true;
-    article.buyer = req.user._id;
-    await article.save();
-
-    res.status(200).json({ message: "Article acheté avec succès", article });
-  } catch (error) {
-    console.error("Erreur lors de l'achat :", error);
-    res.status(500).json({ message: "Erreur serveur" });
-  }
-};
-
-//Nouvelle version Restful pour acheter
+// =========================
+// 🛒 ACHETER ARTICLE
+// =========================
 export const buyArticle = async (req, res) => {
   try {
     const article = await ArticleModel.findById(req.params.id);
+
     if (!article) {
       return res.status(404).json({ message: "Article non trouvé" });
     }
+
     if (article.isSold) {
-      return res.status(400).json({ message: "Article déjà vendu" });
+      return res.status(400).json({ message: "Déjà vendu" });
     }
 
     article.buyer = req.user._id;
     article.isSold = true;
+
     await article.save();
 
-    res.status(200).json(article);
+    res.json(article);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// Like / Dislike un article
+// =========================
+// ❤️ LIKE / UNLIKE
+// =========================
 export const likeArticle = async (req, res) => {
   try {
     const article = await ArticleModel.findById(req.params.id);
+
     if (!article) {
       return res.status(404).json({ message: "Article non trouvé" });
     }
 
     const userId = req.user._id.toString();
-    if (!article.likes) article.likes = [];
 
-    const index = article.likes.findIndex(id => id.toString() === userId);
+    const index = article.likes.findIndex((id) => id.toString() === userId);
 
     if (index !== -1) {
-      // Déjà liké, on retire
       article.likes.splice(index, 1);
     } else {
-      // Pas encore liké, on ajoute
       article.likes.push(userId);
     }
 
     await article.save();
-    res.status(200).json(article);
+
+    res.json(article);
   } catch (error) {
-    console.error("Erreur lors du like :", error);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-
-// Supprimer un article
+// =========================
+// 🔒 DELETE ARTICLE (SECURE)
+// =========================
 export const deleteArticle = async (req, res) => {
   try {
-    const { id } = req.params;
+    const article = await ArticleModel.findById(req.params.id);
 
-    const deleted = await ArticleModel.findByIdAndDelete(id);
-
-    if (!deleted) {
-      return res.status(404).json({ message: "Article non trouvé" });
+    if (!article) {
+      return res.status(404).json({ message: "Introuvable" });
     }
 
-    res.status(200).json({ message: "Article supprimé avec succès" });
+    if (article.author.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Non autorisé" });
+    }
+
+    await article.deleteOne();
+
+    res.json({ message: "Supprimé" });
   } catch (error) {
-    console.error("Erreur lors de la suppression :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-  // mettre a jour un article
-  
+
+// =========================
+// 🔒 UPDATE ARTICLE
+// =========================
 export const updateArticle = async (req, res) => {
   try {
-    const articleId = req.params.id;
-    const { title, content } = req.body;
+    const article = await ArticleModel.findById(req.params.id);
 
-    // Trouver l'article par ID et mettre à jour les champs title et content
-    const updatedArticle = await ArticleModel.findByIdAndUpdate(
-      articleId,
-      { title, content },
-      { new: true } // renvoyer l'article mis à jour
-    );
-
-    if (!updatedArticle) {
-      return res.status(404).json({ message: "Article non trouvé" });
+    if (!article) {
+      return res.status(404).json({ message: "Introuvable" });
     }
 
-    res.status(200).json(updatedArticle);
+    if (article.author.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Non autorisé" });
+    }
+
+    const { title, description, price, category, location } = req.body;
+
+    article.title = title || article.title;
+    article.description = description || article.description;
+    article.price = price || article.price;
+    article.category = category || article.category;
+    article.location = location || article.location;
+
+    await article.save();
+
+    res.json(article);
   } catch (error) {
-    console.error("Erreur lors de la mise à jour de l'article :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
+// =========================
+// 👤 ARTICLES USER
+// =========================
 export const getArticlesByUser = async (req, res) => {
   try {
     const articles = await ArticleModel.find({ author: req.user._id })
-  .populate("likes")
-  .populate({
-    path: "comments",
-    populate: {
-      path: "author",
-      select: "email name", // 👤 On récupère nom + email du commentateur
-    },
-  })
-    res.status(200).json(articles);
+      .populate("likes")
+      .populate({
+        path: "comments",
+        populate: { path: "author", select: "name email" },
+      });
+
+    res.json(articles);
   } catch (error) {
-    console.error(
-      "Erreur lors de la récupération des articles de l'utilisateur :",
-      error
-    );
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
+// =========================
+// ❤️ ARTICLES LIKÉS
+// =========================
 export const getLikedArticles = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const articles = await ArticleModel.find({ likes: userId }).populate(
-      "author",
-      "email"
-    );
-    res.status(200).json(articles);
+    const articles = await ArticleModel.find({
+      likes: req.user._id,
+    }).populate("author", "name");
+
+    res.json(articles);
   } catch (error) {
-    console.error("Erreur getLikedArticles :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// ✅ Nouveau : récupérer un seul article avec ses commentaires
+// =========================
+// 📄 ARTICLE DETAIL + 👁️ VIEWS
+// =========================
 export const getArticleById = async (req, res) => {
   try {
     const article = await ArticleModel.findById(req.params.id)
-      .populate("author", "email name")
+      .populate("author", "name profilePicture")
       .populate({
         path: "comments",
-        populate: { path: "author", select: "email" },
+        populate: { path: "author", select: "name email" },
       });
 
     if (!article) {
-      return res.status(404).json({ message: "Article non trouvé" });
+      return res.status(404).json({ message: "Introuvable" });
     }
 
-    res.status(200).json(article);
+    // 👁️ incrémenter vues
+    article.views += 1;
+    await article.save();
+
+    res.json(article);
   } catch (error) {
-    console.error("Erreur getArticleById :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
-
-
-
-

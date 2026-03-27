@@ -1,45 +1,49 @@
-import Notification from "../models/NotificationModel.js"; // importe ton modèle Mongoose
+import Notification from "../models/NotificationModel.js";
 
-// GET /api/notifications
+// =========================
+// 🔔 RÉCUPÉRER LES NOTIFICATIONS
+// =========================
 export const getNotifications = async (req, res) => {
   try {
-    const notifications = await Notification.find({ user: req.user._id })
-      .populate("sender", "username email")
+    // ✅ Sécurité
+    if (!req.user) {
+      return res.status(401).json({ message: "Non autorisé" });
+    }
+
+    const notifications = await Notification.find({
+      user: req.user._id,
+    })
+      .populate("sender", "name email")
       .sort({ createdAt: -1 })
       .limit(20);
 
     res.status(200).json(notifications);
   } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    console.error("Erreur getNotifications:", error.message);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-/*export const getUnreadNotificationCount = async (req, res) => {
-  try {
-    const count = await NotificationModel.countDocuments({
-      user: req.user._id,
-      read: false,
-    });
-    res.json({ unreadCount: count });
-  } catch (error) {
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
-  }
-};*/
-
+// =========================
+// 🔢 NOMBRE NON LUES
+// =========================
 export const getUnreadCount = async (req, res) => {
   try {
     const count = await Notification.countDocuments({
       user: req.user._id,
       read: false,
     });
+
     res.json({ unreadCount: count });
   } catch (error) {
     console.error("Erreur getUnreadCount:", error.message);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
 
-// PATCH /api/notifications/:id/read
+// =========================
+// ✅ MARQUER UNE COMME LUE
+// =========================
 export const markNotificationAsRead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -47,16 +51,36 @@ export const markNotificationAsRead = async (req, res) => {
     const notification = await Notification.findOneAndUpdate(
       { _id: id, user: req.user._id },
       { read: true },
-      { new: true }
+      { new: true },
     );
 
     if (!notification) {
       return res.status(404).json({ message: "Notification introuvable" });
     }
 
-    res.status(200).json({ message: "Notification marquée comme lue", notification });
+    res.json({
+      message: "Notification marquée comme lue",
+      notification,
+    });
   } catch (error) {
     console.error("Erreur markNotificationAsRead:", error.message);
-    res.status(500).json({ message: "Erreur serveur", error: error.message });
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
+
+// =========================
+// 🔥 MARQUER TOUT COMME LU
+// =========================
+export const markAllAsRead = async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { user: req.user._id, read: false },
+      { read: true },
+    );
+
+    res.json({ message: "Toutes les notifications sont lues" });
+  } catch (error) {
+    console.error("Erreur markAllAsRead:", error.message);
+    res.status(500).json({ message: "Erreur serveur" });
   }
 };
