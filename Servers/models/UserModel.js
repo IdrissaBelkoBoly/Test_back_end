@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema(
 
     profilePicture: {
       type: String,
-      default: "https://via.placeholder.com/100",
+      default: "https://ui-avatars.com/api/?name=User",
     },
 
     role: { type: String, default: "user" },

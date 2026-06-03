@@ -1,46 +1,79 @@
-// src/auth/AuthContext.js
-import { createContext, useState, useEffect , useContext } from "react";
 
-  export const AuthContext = createContext();
+import { createContext, useState, useEffect, useContext } from "react";
+
+export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(() => localStorage.getItem("token") || "");
-  const [profileVersion, setProfileVersion]= useState(0);
-  const [refreshArticles, setRefreshArticles] = useState(0);
-
-  useEffect(() => {
-    if (token) {
-      // Tu peux aussi stocker l’utilisateur dans le localStorage si tu veux
-      const storedUser = JSON.parse(localStorage.getItem("user"));
-      if (storedUser) setUser(storedUser);
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem("user");
+      return stored && stored !== "undefined" ? JSON.parse(stored) : null;
+    } catch {
+      return null;
     }
+  });
+
+  const [token, setToken] = useState(() => {
+    const stored = localStorage.getItem("token");
+    return stored && stored !== "undefined" ? stored : null;
+  });
+
+  const [loading, setLoading] = useState(true);
+
+  // 🔥 SYNC AVEC BACKEND
+  useEffect(() => {
+    const syncUser = async () => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const res = await fetch("http://localhost:5000/api/users/me", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          setUser(data);
+          localStorage.setItem("user", JSON.stringify(data));
+        } else {
+          logout();
+        }
+      } catch (err) {
+        console.log("❌ SYNC ERROR:", err);
+        logout();
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    syncUser();
   }, [token]);
 
- /* const login = (userData, token) => {
+  // 🔐 LOGIN
+  const login = (userData, token) => {
     setUser(userData);
     setToken(token);
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(userData));
-  };*/
-  const login = (userData, token) => {
-    const fullUser = { ...userData, token }; // ajoute le token dans l'objet user
-    setUser(fullUser);
-    setToken(token);
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(fullUser));
-  };
-  
 
+    localStorage.setItem("user", JSON.stringify(userData));
+    localStorage.setItem("token", token);
+  };
+
+  // 🔓 LOGOUT
   const logout = () => {
     setUser(null);
-    setToken("");
-    localStorage.removeItem("token");
+    setToken(null);
+
     localStorage.removeItem("user");
+    localStorage.removeItem("token");
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout , setUser ,profileVersion,setProfileVersion,refreshArticles,setRefreshArticles}}>
+    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

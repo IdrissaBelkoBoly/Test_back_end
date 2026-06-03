@@ -1,117 +1,165 @@
-// src/pages/Home.js
 import React, { useEffect, useState, useContext } from "react";
-import { useNavigate } from "react-router-dom";
 import AuthContext from "../auth/AuthContext";
-import { getAllArticles, likeArticle } from "../services/ArticleService";
+import { likeArticle } from "../services/ArticleService";
+import ArticleCard from "../components/ArticleCard";
 
 const Home = () => {
   const { user, token } = useContext(AuthContext);
+
   const [articles, setArticles] = useState([]);
-  const navigate = useNavigate();
+  const [isFallback, setIsFallback] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [showFilters, setShowFilters] = useState(false);
 
-  useEffect(() => {
-    const fetchArticles = async () => {
-      try {
-        const response = await getAllArticles();
+  const [filters, setFilters] = useState({
+    search: "",
+    category: "all",
+    minPrice: "",
+    maxPrice: "",
+    location: "",
+    sort: "newest",
+  });
 
-        // ✅ filtrer les articles sauf ceux de l'utilisateur
-        const filtered = response.filter(
-          (article) => article.author._id !== user.id
-        );
 
-        // ✅ Toujours forcer media à être un tableau
-        const normalized = filtered.map((article) => ({
-          ...article,
-          media: Array.isArray(article.media)
-            ? article.media
-            : article.media
-            ? [article.media]
-            : [],
-        }));
+  // ⚡ recherche auto (debounce)
+ useEffect(() => {
+   const fetchArticles = async () => {
+     try {
+       console.log("🔥 Recherche avec :", filters);
 
-        setArticles(normalized);
-      } catch (error) {
-        console.error("Erreur lors du chargement des articles :", error);
-      }
-    };
+       const query = new URLSearchParams(filters).toString();
+       const res = await fetch(`http://localhost:5000/api/articles?${query}`);
+       const data = await res.json();
 
-    if (user) {
-      fetchArticles();
-    }
-  }, [user]);
+       console.log("✅ RESULT =", data);
 
-  const handleLike = async (id) => {
-    try {
-      const updatedArticle = await likeArticle(id, token);
+       const list = data.articles || data;
 
-      setArticles((prev) =>
-        prev.map((a) =>
-          a._id === id
-            ? {
-                ...updatedArticle,
-                media: Array.isArray(updatedArticle.media)
-                  ? updatedArticle.media
-                  : updatedArticle.media
-                  ? [updatedArticle.media]
-                  : [],
-              }
-            : a
-        )
-      );
-    } catch (err) {
-      console.error("Erreur lors du like :", err);
-    }
-  };
+       const filtered = user
+         ? list.filter((article) => article.author._id !== user.id)
+         : list;
 
-  const handlePurchase = (id) => {
-    navigate(`/checkout/${id}`);
-  };
+       setArticles(filtered);
+       setIsFallback(data.fallback || false);
+
+       setSuggestions(list.slice(0, 5).map((a) => a.title));
+     } catch (error) {
+       console.error(error);
+     }
+   };
+
+   const delay = setTimeout(() => {
+     fetchArticles();
+   }, 500); // debounce
+
+   return () => clearTimeout(delay);
+ }, [filters, user]);
+
+ const handleChange = (e) => {
+   setFilters({ ...filters, [e.target.name]: e.target.value });
+ };
+ const handleLike = async (id) => {
+   try {
+     const updated = await likeArticle(id, token);
+     setArticles((prev) => prev.map((a) => (a._id === id ? updated : a)));
+   } catch (err) {
+     console.error(err);
+   }
+ };
 
   return (
-    <div classeName="home-container">
-      <h2>Articles des autres utilisateurs</h2>
-      {articles.length === 0 ? (
-        <p>Aucun article à afficher.</p>
-      ) : (
-        <ul className="article-list">
-          {articles.map((article) => (
-            <li key={article._id} className="article-card">
-              {/* ✅ Boucle sur tous les fichiers du tableau media */}
-              {article.media.length > 0 && (
-                <div className="article-media">
-                  {article.media.map((file, index) => (
-                    <div key={index}>
-                      {file.endsWith(".mp4") || file.endsWith(".webm") ? (
-                        <video src={file} controls />
-                      ) : (
-                        <img src={file} alt={`media-${index}`} />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+    <div className="home-container">
+      {/* 🔍 SEARCH */}
+      <div className="search-bar">
+        <input
+          type="text"
+          name="search"
+          placeholder="🔍 Rechercher un produit..."
+          value={filters.search}
+          onChange={handleChange}
+        />
+      </div>
 
-              <h3>{article.title}</h3>
-              <p>{article.content}</p>
-              <p>Posté par : {article.author.name}</p>
-
-              <div className="article-actions">
-                <button onClick={() => handleLike(article._id)}>
-                  ❤️ J'aime
-                </button>
-                <button onClick={() => navigate(`/article/${article._id}`)}>
-                  💬 Commenter
-                </button>
-                <button onClick={() => handlePurchase(article._id)}>
-                  🛒 Acheter
-                </button>
-              </div>
-            </li>
+      {/* 🔍 SUGGESTIONS */}
+      {suggestions.length > 0 && filters.search && (
+        <div className="suggestions">
+          {suggestions.map((s, i) => (
+            <p key={i} onClick={() => setFilters({ ...filters, search: s })}>
+              {s}
+            </p>
           ))}
-        </ul>
+        </div>
       )}
+
+      {/* 🏷️ CATEGORIES (UX SIMPLE) */}
+      <div className="categories">
+        {["all", "Electronique", "Vêtements", "Meubles", "Autres"].map(
+          (cat) => (
+            <button
+              key={cat}
+              className={filters.category === cat ? "active" : ""}
+              onClick={() => setFilters({ ...filters, category: cat })}
+            >
+              {cat}
+            </button>
+          ),
+        )}
+      </div>
+
+      <div className="filter-toggle">
+        <button onClick={() => setShowFilters(!showFilters)}>⚙️ Filtres</button>
+      </div>
+
+      {/* ⚙️ FILTRES AVANCÉS (OPTIONNEL MAIS GARDE) */}
+      {showFilters && (
+        <div className="filters">
+          <input
+            type="number"
+            name="minPrice"
+            placeholder="Prix min"
+            onChange={handleChange}
+          />
+
+          <input
+            type="number"
+            name="maxPrice"
+            placeholder="Prix max"
+            onChange={handleChange}
+          />
+
+          <input
+            type="text"
+            name="location"
+            placeholder="📍 Ville..."
+            onChange={handleChange}
+          />
+
+          <select name="sort" onChange={handleChange}>
+            <option value="newest">Plus récent</option>
+            <option value="priceAsc">Prix croissant</option>
+            <option value="priceDesc">Prix décroissant</option>
+          </select>
+        </div>
+      )}
+
+      {/* 🔥 UX MESSAGE */}
+      {isFallback && articles.length > 0 && <p>🔍 Résultats approximatifs</p>}
+
+      {articles.length === 0 && <p>😕 Aucun résultat trouvé</p>}
+
+      {/* 📦 ARTICLES */}
+      <div className="articles-grid">
+        {articles.map((article) => (
+          <ArticleCard
+            key={article._id}
+            article={article}
+            onLike={handleLike}
+          />
+        ))}
+      </div>
     </div>
   );
+
 };
 
 export default Home;

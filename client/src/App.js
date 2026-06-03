@@ -1,83 +1,76 @@
-import React, { useContext } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import Navbar from "./components/Navbar";
 import Home from "./pages/Home";
-import Articles from "./pages/Articles";
-import Users from "./pages/Users";
+import ArticleDetail from "./pages/ArticleDetail";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import ArticleDetail from "./pages/ArticleDetail.js";
-import Profile from "./pages/Profile.js";
-import CheckoutPages from "./pages/CheckoutPages.js"; // ✅ Respecte le bon nom de fichier
-import PurchaseSuccessPage from "./pages/PurchaseSuccessPage";
-import CommentPage from "./pages/CommentPage.js";
-import MyTransfers from "./pages/MyTransfers";
-import MyPurchases from "./pages/MyPurchases";
-import ConfirmationsPage from "./pages/ConfirmationsPage";
+import CreateArticle from "./pages/CreateArticle";
+import Profile from "./pages/Profile";
+import Notifications from "./pages/Notifications";
+import Messages from "./pages/Messages";
+import { useAuth } from "./auth/AuthContext";
+import { useContext, useEffect } from "react";
+import "./App.css";
+import CallComponent from "./components/CallComponent";
+import GlobalCallUI from "./components/GlobalCallUI";
+import CallContext from "./context/CallContext";
+import CallsPage from "./pages/CallsPage";
 
 
-//import AddArticle from "./pages/AddArticle";
-//import Comments from "./pages/Comments";
-//import Favorites from "./pages/Favorites";
-//import Chat from "./pages/Chat";
+// 🔐 Protection des routes
+const PrivateRoute = ({ children }) => {
+  const { token, loading } = useAuth();
+ 
+  if(loading) return <p>chargement...</p>
 
-import PrivateRoute from "./utils/PrivateRoute.js";
-import { AuthProvider, default as AuthContext } from "./auth/AuthContext.js";
-
-const App = () => {
-  return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
-  );
+  return token ? children : <Navigate to="/login" />;
 };
 
-const AppRoutes = () => {
-  const { token } = useContext(AuthContext);
+
+function App() {
+
+  const { currentCallUser, callAccepted, callData } = useContext(CallContext);
+   
+  useEffect(() => {
+    const unlockAudio = () => {
+      document.querySelectorAll("audio").forEach((audio) => {
+        audio
+          .play()
+          .then(() => {
+            audio.pause();
+            audio.currentTime = 0;
+          })
+          .catch(() => {});
+      });
+
+      window.removeEventListener("click", unlockAudio);
+    };
+
+    window.addEventListener("click", unlockAudio);
+  }, []);
 
   return (
     <>
       <Navbar />
+
       <Routes>
-        <Route
-          path="/"
-          element={token ? <Navigate to="/home" /> : <Navigate to="/login" />}
-        />
+        {/* 🔓 PUBLIC */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/profile" element={<Profile />} />
+        <Route path="/notifications" element={<Notifications />} />
+        <Route path="/calls" element={<CallsPage />} />
 
+        {/* 🔒 PRIVÉ */}
         <Route
-          path="/home"
+          path="/"
           element={
             <PrivateRoute>
               <Home />
             </PrivateRoute>
           }
         />
-        <Route
-          path="/articles"
-          element={
-            <PrivateRoute>
-              <Articles />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <PrivateRoute>
-              <Users />
-            </PrivateRoute>
-          }
-        />
-        <Route
-          path="/profile"
-          element={
-            <PrivateRoute>
-              <Profile />
-            </PrivateRoute>
-          }
-        />
+
         <Route
           path="/article/:id"
           element={
@@ -87,39 +80,43 @@ const AppRoutes = () => {
           }
         />
 
-        <Route path="/checkout/:id" element={<CheckoutPages />} />
-
-        <Route path="/purchase-success" element={<PurchaseSuccessPage />} />
-        <Route path="/comments/:articleId" element={<CommentPage />} />
         <Route
-          path="/my-transfers"
+          path="/create"
           element={
             <PrivateRoute>
-              <MyTransfers />
+              <CreateArticle />
             </PrivateRoute>
           }
         />
 
+        {/* 📩 LISTE DES CONVERSATIONS */}
         <Route
-          path="/my-purchases"
+          path="/messages"
           element={
             <PrivateRoute>
-              <MyPurchases />
+              <Messages />
             </PrivateRoute>
           }
         />
 
+        {/* 💬 CONVERSATION AVEC UN USER */}
         <Route
-          path="/confirmations"
+          path="/messages/:userId"
           element={
             <PrivateRoute>
-              <ConfirmationsPage />
+              <Messages />
             </PrivateRoute>
           }
         />
       </Routes>
+
+      {(callAccepted || callData) && (
+        <CallComponent key={currentCallUser?._id || "call"} />
+      )}
+
+      <GlobalCallUI />
     </>
   );
-};
+}
 
 export default App;

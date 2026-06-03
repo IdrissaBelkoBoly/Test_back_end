@@ -1,103 +1,91 @@
-// src/pages/ArticleDetail.js
-import { useEffect, useState, useContext } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import axios from "axios";
+import React, { useEffect, useState, useContext, useRef } from "react";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import AuthContext from "../auth/AuthContext";
-import CommentSection from "../components/Comments/CommentSection";
+import CommentSection from "../components/CommentSection";
 
 const ArticleDetail = () => {
   const { id } = useParams();
+  const { token } = useContext(AuthContext);
   const navigate = useNavigate();
+  const location = useLocation();
+
   const [article, setArticle] = useState(null);
-  const { token, user } = useContext(AuthContext); // On garde user, on l'utilise plus bas
 
+  // 🔥 REF POUR SCROLL
+  const commentsRef = useRef(null);
+
+  // 🔥 LOAD ARTICLE
   useEffect(() => {
-    const fetchArticle = async () => {
-      try {
-        const res = await axios.get(`/api/articles/${id}`);
-        setArticle(res.data);
-      } catch (err) {
-        console.error("Erreur chargement article :", err);
-      }
-    };
-
-    fetchArticle();
+    fetch(`http://localhost:5000/api/articles/${id}`)
+      .then((res) => res.json())
+      .then((data) => setArticle(data));
   }, [id]);
 
-  const handleLike = async () => {
-    try {
-      const res = await axios.post(
-        `/api/articles/${id}/like`,
-        {},
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setArticle(res.data);
-    } catch (err) {
-      console.error(err);
-      alert("Erreur lors du like");
+  // 🔥 SCROLL AUTOMATIQUE
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const scroll = params.get("scroll");
+
+    if (scroll === "comments") {
+      setTimeout(() => {
+        commentsRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 300);
     }
-  };
+  }, [location]);
 
   if (!article) return <p>Chargement...</p>;
 
-  return (
-    <div>
-      <h2>{article.title}</h2>
-      <p>{article.content}</p>
+  // 🖼️ IMAGE FIX
+  const image = article.media?.[0];
+  const imageUrl = image?.startsWith("http")
+    ? image
+    : `http://localhost:5000/${image}`;
 
-      {/* ✅ Affichage des images / vidéos */}
-      {article.media && article.media.length > 0 && (
-        <div style={{ marginTop: "1rem" }}>
-          {article.media.map((file, index) => (
-            <div key={index} style={{ marginBottom: "1rem" }}>
-              {file.endsWith(".mp4") || file.endsWith(".webm") ? (
-                <video
-                  src={`http://localhost:5000/${file}`}
-                  controls
-                  style={{ maxWidth: "100%" }}
-                />
-              ) : (
-                <img
-                  src={`http://localhost:5000/${file}`}
-                  alt={`media-${index}`}
-                  style={{
-                    maxWidth: "300px",
-                    maxHeight: "300px",
-                    height: "auto",
-                    display: "block",
-                    marginTop: "0.5rem",
-                  }}
-                />
-              )}
-            </div>
-          ))}
-        </div>
+  return (
+    <div className="article-detail">
+      {/* 🧾 INFOS */}
+      <h2>{article.title}</h2>
+
+      {image && (
+        <img
+          src={imageUrl}
+          alt={article.title}
+          className="article-detail-image"
+        />
       )}
 
-      <p>
-        Auteur : {article.author?.email || "Inconnu"} <br />
-        Statut : {article.buyer ? "Déjà acheté" : "Disponible"}
-      </p>
+      <p className="price">💰 {article.price} MAD</p>
 
-      {/* Likes */}
-      <p>❤️ {article.likes?.length || 0} likes</p>
-      {token && <button onClick={handleLike}>❤️ Liker</button>}
+      <p>{article.description}</p>
 
-      {/* Bouton d’achat */}
-      {!article.buyer && token && (
-        <button onClick={() => navigate(`/checkout/${article._id}`)}>
+      <p className="location">📍 {article.location || "Non précisé"}</p>
+
+      <p>👤 {article.author?.name}</p>
+
+      {/* 🔘 ACTIONS */}
+      <div className="detail-actions">
+        <button
+          className="contact-btn"
+          onClick={() => {
+            console.log("GO TO CHAT:", article.author?._id);
+            navigate(`/messages/${article.author._id}`);
+          }}
+        >
+          Contacter vendeur
+        </button>
+
+        <button
+          className="buy-btn"
+          onClick={() => navigate(`/checkout/${article._id}`)}
+        >
           🛒 Acheter
         </button>
-      )}
+      </div>
 
-      {/* Affichage de l'utilisateur connecté */}
-      {user && (
-        <p className="text-sm text-gray-500">
-          Connecté en tant que : {user.username || user.email}
-        </p>
-      )}
-
-      <CommentSection articleId={article._id} />
+      {/* 💬 COMMENTAIRES */}
+      <div ref={commentsRef}>
+        <CommentSection articleId={article._id} token={token} />
+      </div>
     </div>
   );
 };

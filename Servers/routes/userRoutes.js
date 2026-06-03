@@ -11,6 +11,7 @@ import {
   getMe,
   getUserArticles,
   getUserPurchases,
+  getUserById,
 } from "../controllers/UserController.js";
 
 const router = express.Router();
@@ -65,5 +66,7 @@ router.get("/:id/articles", getUserArticles);
 
 // Achats d’un user
 router.get("/:id/purchases", getUserPurchases);
+
+router.get("/:id", getUserById);
 
 export default router;

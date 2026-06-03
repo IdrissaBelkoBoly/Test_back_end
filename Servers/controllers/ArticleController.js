@@ -38,36 +38,97 @@ export const createArticle = async (req, res) => {
 // =========================
 export const getArticles = async (req, res) => {
   try {
-    const { category, search } = req.query;
+    const { search, category, minPrice, maxPrice, location, sort } = req.query;
 
-    let filter = { isSold: false };
+    let query = { isSold: false };
+    let usedFallback = false;
+    let words = [];
 
-    if (category) {
-      filter.category = category;
+    // 🔍 SEARCH
+    if (search && search.trim() !== "") {
+      words = search.trim().split(" ");
+
+      query.$or = words.flatMap((word) => [
+        { title: { $regex: word, $options: "i" } },
+        { description: { $regex: word, $options: "i" } },
+        { content: { $regex: word, $options: "i" } },
+      ]);
     }
 
-    if (search) {
-      filter.title = { $regex: search, $options: "i" };
+    // 🏷️ CATEGORY
+    if (category && category !== "all") {
+      query.category = category;
     }
 
-    const articles = await ArticleModel.find(filter)
-      .populate("author", "name profilePicture")
-      .sort({ createdAt: -1 })
+    // 💰 PRICE
+    if (minPrice || maxPrice) {
+      query.price = {};
+      if (minPrice) query.price.$gte = Number(minPrice);
+      if (maxPrice) query.price.$lte = Number(maxPrice);
+    }
+
+    // 📍 LOCATION
+    if (location && location.trim() !== "") {
+      query.location = { $regex: location, $options: "i" };
+    }
+
+    // 📊 SORT
+    let sortOption = { createdAt: -1 };
+    if (sort === "priceAsc") sortOption = { price: 1 };
+    if (sort === "priceDesc") sortOption = { price: -1 };
+
+    console.log("🔥 QUERY =", query);
+
+    // ✅ SEARCH NORMAL
+    let articles = await ArticleModel.find(query)
+      .populate("author", "name")
+      .populate("comments")
+      .sort(sortOption)
       .lean();
 
+    // 🔥 FALLBACK
+    if (articles.length === 0 && search) {
+      console.log("⚠️ Aucun résultat → fallback activé");
+
+      usedFallback = true;
+
+      const relaxedQuery = {
+        isSold: false,
+        $or: words.flatMap((word) => [
+          { title: { $regex: word, $options: "i" } },
+          { description: { $regex: word, $options: "i" } },
+          { content: { $regex: word, $options: "i" } },
+        ]),
+      };
+
+      articles = await ArticleModel.find(relaxedQuery)
+        .populate("author", "name")
+        .sort(sortOption)
+        .lean();
+    }
+
+    // 🔥 FIX MEDIA
     articles.forEach((article) => {
-      article.media =
-        article.media?.map(
-          (m) => `${req.protocol}://${req.get("host")}/${m}`,
-        ) || [];
+      if (article.media) {
+        article.media = Array.isArray(article.media)
+          ? article.media.map(
+              (m) => `${req.protocol}://${req.get("host")}/${m}`,
+            )
+          : [`${req.protocol}://${req.get("host")}/${article.media}`];
+      } else {
+        article.media = [];
+      }
     });
 
-    res.json(articles);
+    res.json({
+      articles,
+      fallback: usedFallback,
+    });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };
-
 // =========================
 // 🛒 ACHETER ARTICLE
 // =========================
@@ -220,18 +281,36 @@ export const getArticleById = async (req, res) => {
       .populate({
         path: "comments",
         populate: { path: "author", select: "name email" },
-      });
+      })
+      .lean(); // 🔥 IMPORTANT
 
     if (!article) {
       return res.status(404).json({ message: "Introuvable" });
     }
 
     // 👁️ incrémenter vues
-    article.views += 1;
-    await article.save();
+    await ArticleModel.findByIdAndUpdate(req.params.id, {
+      $inc: { views: 1 },
+    });
+
+    // 🔥 FIX IMAGE / MEDIA
+    if (article.media) {
+      if (Array.isArray(article.media)) {
+        article.media = article.media.map(
+          (m) => `${req.protocol}://${req.get("host")}/${m}`,
+        );
+      } else {
+        article.media = [
+          `${req.protocol}://${req.get("host")}/${article.media}`,
+        ];
+      }
+    } else {
+      article.media = [];
+    }
 
     res.json(article);
   } catch (error) {
+    console.error("Erreur getArticleById :", error);
     res.status(500).json({ message: "Erreur serveur" });
   }
 };

@@ -11,11 +11,12 @@ const notificationSchema = new mongoose.Schema(
     sender: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // celui qui à généré la notification
     type: {
       type: String,
-      enum: ["reply", "comment", "like", "purchase"],
+      enum: ["reply", "comment", "like", "purchase", "message"],
       required: true,
     }, // ex: 'reply', 'like', etc.
     commentId: { type: mongoose.Schema.Types.ObjectId, ref: "Comment" },
     articleId: { type: mongoose.Schema.Types.ObjectId, ref: "Article" },
+    messageId: { type: mongoose.Schema.Types.ObjectId, ref: "Message" },
     message: { type: String, required: true },
     read: { type: Boolean, default: false, index: true },
   },

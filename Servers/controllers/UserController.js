@@ -32,7 +32,7 @@ export const newUser = async (req, res, next) => {
     res.status(201).json({
       message: "Utilisateur créé avec succès",
       user: {
-        id: newUser._id,
+        _id: newUser._id,
         name: newUser.name,
         email: newUser.email,
       },
@@ -75,7 +75,7 @@ const token = generateToken(user._id);
     res.status(200).json({
       message: "Connexion réussie",
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
       },
@@ -150,5 +150,19 @@ export const getUserPurchases = async (req, res) => {
 };
 
 
+export const getUserById = async (req, res) => {
+  try {
+    const user = await UserModel.findById(req.params.id).select("name email profilePicture" ,);
+
+    if (!user) {
+      return res.status(404).json({ message: "Utilisateur non trouvé" });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error("Erreur getUserById :" , error);
+    res.status(500).json({ message: "Erreur serveur" });
+  }
+};
 
 //export default {newUser, deleteUser, loginUser };

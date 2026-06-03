@@ -1,54 +1,88 @@
-// src/auth/Login.jsx
-import { useState, useContext } from "react";
-import AuthContext from "../auth/AuthContext";
-import axios from "axios";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 
-function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const { login } = useContext(AuthContext);
+const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
 
+  const [form, setForm] = useState({
+    email: "",
+    password: "",
+  });
+
+  const [error, setError] = useState("");
+
+  // gérer input
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
+  };
+
+  // 🔥 LOGIN
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     try {
-      const res = await axios.post("/api/users/login", {
-        email,
-        password,
+      const res = await fetch("http://localhost:5000/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(form),
       });
 
-      login(res.data.user, res.data.token);
+      const data = await res.json();
+      console.log("DATA BACKEND:", data);
+      console.log("USER BACKEND:", data.user);
+
+      if (!res.ok) {
+        setError(data.message || "Erreur de connexion");
+        return;
+      }
+
+      console.log("✅ LOGIN OK :", data);
+
+      // 🔥 IMPORTANT
+      login(data.user, data.token);
+
+      // redirection
       navigate("/");
     } catch (err) {
-      alert(err.response?.data?.message || "Erreur lors de la connexion");
+      console.error(err);
+      setError("Erreur serveur");
     }
   };
 
   return (
     <div className="login-container">
-      <form className="login-form" onSubmit={handleSubmit}>
-        <h2>Connexion</h2>
+      <h2>Connexion</h2>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
+
+      <form onSubmit={handleSubmit}>
         <input
           type="email"
-          placeholder="Adresse email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
+          name="email"
+          placeholder="Email"
+          value={form.email}
+          onChange={handleChange}
         />
-        <br />
+
         <input
           type="password"
+          name="password"
           placeholder="Mot de passe"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
+          value={form.password}
+          onChange={handleChange}
         />
-        <br />
+
         <button type="submit">Se connecter</button>
       </form>
+      <p>
+        Pas de compte ? <a href="/register">S'inscrire</a>
+      </p>
     </div>
   );
-}
+};
 
 export default Login;
