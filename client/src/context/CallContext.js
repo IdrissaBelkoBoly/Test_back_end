@@ -32,6 +32,7 @@ export const CallProvider = ({ children }) => {
   useEffect(() => {
     const handler = (data) => {
       console.log("📥 CALL REÇU:", data);
+       console.log("CALL ID REÇU =", data.callId);
 
       incomingAudioRef.current.play().catch(() => {});
 

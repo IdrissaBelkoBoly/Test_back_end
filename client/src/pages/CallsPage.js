@@ -45,25 +45,46 @@ const CallsPage = () => {
     });
   };
 
-  const getStatus = (call) => {
-    const status = call?.status;
-
-    switch (status) {
-      case "missed":
-        return { text: "Appel manqué", color: "red" };
-
-      case "rejected":
-        return { text: "Refusé", color: "orange" };
-
-      case "accepted":
-        return { text: "Accepté", color: "green" };
-
-      case "ended":
-        return { text: "Terminé", color: "blue" };
-
-      default:
-        return { text: status || "Terminé", color: "blue" };
+  const getStatus = (call, isCaller) => {
+    if (call.status === "rejected") {
+      return {
+        text: isCaller ? "❌ Appel refusé" : "❌ Vous avez refusé l'appel",
+        color: "orange",
+      };
     }
+
+    if (call.status === "missed") {
+      return {
+        text: isCaller ? "📴 Sans réponse" : "📵 Appel manqué",
+        color: "red",
+      };
+    }
+
+    if (call.status === "ended" && call.duration === 0) {
+      return {
+        text: "📴 Sans réponse",
+        color: "red",
+      };
+    }
+
+    if (call.status === "ended" && call.duration > 0) {
+      return {
+        text: "✅ Appel terminé",
+        color: "green",
+      };
+    }
+
+    if (call.status === "accepted") {
+      return {
+        text: "📞 Appel accepté",
+        color: "green",
+      };
+    }
+
+    return {
+      text: "📞 Appel",
+      color: "blue",
+    };
   };
 
   if (loading) {
@@ -94,7 +115,7 @@ const CallsPage = () => {
           const isCaller = call?.caller?._id === user._id;
           const otherUser = isCaller ? call?.receiver : call?.caller;
 
-          const status = getStatus(call);
+          const status = getStatus(call, isCaller);
 
           return (
             <div
@@ -131,7 +152,15 @@ const CallsPage = () => {
                     {otherUser?.name || "Utilisateur"}
                   </h4>
 
-                  <p>STATUS BRUT = {call.status}</p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: "12px",
+                      color: "#888",
+                    }}
+                  >
+                    {isCaller ? "↗ Appel sortant" : "↙ Appel entrant"}
+                  </p>
 
                   <p style={{ margin: 0, fontSize: "12px", color: "#666" }}>
                     {formatDate(call?.startedAt)}

@@ -41,6 +41,7 @@ const CallComponent = () => {
   const screenshotSound = useRef(null);
   const recordStartSound = useRef(null);
   const recordStopSound = useRef(null);
+  const unansweredTimeoutRef = useRef(null);
 
   const [isMuted, setIsMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
@@ -54,6 +55,7 @@ const CallComponent = () => {
   const [isMinimized, setIsMinimized] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [ringingTimeLeft, setRingingTimeLeft] = useState(30);
   const [videoPosition, setVideoPosition] = useState({
     x: window.innerWidth - 180,
     y: 20,
@@ -84,6 +86,7 @@ const CallComponent = () => {
     screenshotSound,
     recordStartSound,
     recordStopSound,
+    unansweredTimeoutRef,
   };
 
   const state = {
@@ -199,6 +202,22 @@ const CallComponent = () => {
     isVideoCall,
   });
 
+  useEffect(() => {
+    if (!currentCallUser || callStarted) return;
+
+    console.log("⏰ TIMER 30s CRÉÉ");
+
+    const timeout = setTimeout(() => {
+      console.log("⏰ APPEL EXPIRÉ APRÈS 30s");
+
+      controls.endCall();
+    }, 30000);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [currentCallUser, callStarted]);
+
   useCallSocket({
     callContext,
     refs,
@@ -229,6 +248,36 @@ const CallComponent = () => {
     recordStopSound.current = new Audio("/sounds/record-stop.mp3");
   }, []);
 
+  useEffect(() => {
+    if (!currentCallUser || callStarted) return;
+
+    setRingingTimeLeft(30);
+
+    const interval = setInterval(() => {
+      setRingingTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+
+          console.log("⏰ COMPTEUR TERMINÉ");
+
+          return 0;
+        }
+
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentCallUser, callStarted]);
+
+  useEffect(() => {
+    if (incomingCall?.callId) {
+      callIdRef.current = incomingCall.callId;
+
+      console.log("CALL ID STOCKÉ RECEVEUR =", callIdRef.current);
+    }
+  }, [incomingCall]);
+
   return (
     <CallUI
       refs={refs}
@@ -238,6 +287,8 @@ const CallComponent = () => {
       formatDuration={formatDuration}
       controls={controls}
       dragHandlers={dragHandlers}
+      callStarted={callStarted}
+      ringingTimeLeft={ringingTimeLeft}
     />
   );
 };

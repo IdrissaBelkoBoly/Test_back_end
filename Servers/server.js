@@ -120,7 +120,7 @@ io.on("connection", (socket) => {
   // =========================
   // 📞 CALL USER
   // =========================
-  socket.on("callUser", ({ userToCall, signalData, from, video, fromUser }) => {
+  socket.on("callUser", ({ userToCall, signalData, from, video, fromUser, callId }) => {
     console.log("📞 BACKEND callUser reçu :", {
       userToCall,
       from,
@@ -142,6 +142,7 @@ io.on("connection", (socket) => {
       signal: signalData,
       video,
       fromUser,
+      callId,
     });
 
     console.log("📤 EMIT vers ROOM:", userToCall);

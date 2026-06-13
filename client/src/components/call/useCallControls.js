@@ -21,6 +21,7 @@ const useCallControls = ({
   const {
     myVideo,
     userVideo,
+    userAudio,
     peerRef,
     startedRef,
     originalCameraStreamRef,
@@ -35,6 +36,7 @@ const useCallControls = ({
     recordStartSound,
     recordStopSound,
     callIdRef,
+    unansweredTimeoutRef,
   } = refs;
 
   const dragRef = useRef(false);
@@ -88,13 +90,13 @@ const useCallControls = ({
     });
 
     if (!state.isMuted) {
-       muteSound.current?.play().catch((err) => {
-         console.log("MUTE SOUND ERROR:", err);
-       });
+      muteSound.current?.play().catch((err) => {
+        console.log("MUTE SOUND ERROR:", err);
+      });
     } else {
-       unmuteSound.current?.play().catch((err) => {
-         console.log("UNMUTE SOUND ERROR:", err);
-       });
+      unmuteSound.current?.play().catch((err) => {
+        console.log("UNMUTE SOUND ERROR:", err);
+      });
     }
 
     setters.setIsMuted(!audioTrack.enabled);
@@ -105,7 +107,7 @@ const useCallControls = ({
   //
 
   const toggleCamera = () => {
-    if(!isVideoCall) return;
+    if (!isVideoCall) return;
 
     const stream = localStreamRef.current;
 
@@ -138,7 +140,7 @@ const useCallControls = ({
   //
 
   const switchCamera = async () => {
-    if(!isVideoCall) return;
+    if (!isVideoCall) return;
     try {
       const newFacingMode =
         state.facingMode === "user" ? "environment" : "user";
@@ -177,7 +179,7 @@ const useCallControls = ({
   //
 
   const startScreenShare = async () => {
-    if(!isVideoCall) return;
+    if (!isVideoCall) return;
     try {
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
@@ -422,6 +424,13 @@ const useCallControls = ({
   //
 
   const endCall = async () => {
+    console.log("🔥 ENDCALL EXECUTÉ");
+
+    if (unansweredTimeoutRef.current) {
+      clearTimeout(unansweredTimeoutRef.current);
+      unansweredTimeoutRef.current = null;
+    }
+
     leaveSound.current?.play();
 
     screenStreamRef.current?.getTracks().forEach((track) => track.stop());
@@ -446,6 +455,11 @@ const useCallControls = ({
       userVideo.current.srcObject = null;
     }
 
+    if (userAudio.current) {
+      userAudio.current.pause();
+      userAudio.current.srcObject = null;
+    }
+
     const senders = peerRef.current?._pc?.getSenders();
 
     senders?.forEach((sender) => {
@@ -463,6 +477,10 @@ const useCallControls = ({
     if (callIdRef.current) {
       console.log("ENVOI UPDATE");
 
+      console.log("DURATION AVANT SAVE =", callDuration);
+
+      console.log("STATE =", state);
+
       const res = await axios.put(`/api/calls/${callIdRef.current}`, {
         status: "ended",
         duration: callDuration,
@@ -474,6 +492,8 @@ const useCallControls = ({
     } else {
       console.log("AUCUN CALL ID");
     }
+
+    console.log("EMIT END CALL");
 
     socket.emit("endCall", {
       to: incomingCall?.from || currentCallUser?._id,
@@ -586,7 +606,6 @@ const useCallControls = ({
   //
   // ================= RETURN =================
   //
-
   return {
     formatDuration,
 

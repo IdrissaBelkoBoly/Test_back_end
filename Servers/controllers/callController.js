@@ -13,7 +13,7 @@ export const createCall = async (req, res) => {
       caller,
       receiver,
       type,
-      status: "accepted",
+      status: "ringing",
       startedAt: new Date(),
     });
 
@@ -28,6 +28,10 @@ export const createCall = async (req, res) => {
 ========================= */
 export const updateCall = async (req, res) => {
   try {
+
+     console.log("UPDATE CALL PARAMS =", req.params);
+     console.log("UPDATE CALL BODY =", req.body);
+
     const { callId } = req.params;
     const { status, duration } = req.body;
 
@@ -40,6 +44,8 @@ export const updateCall = async (req, res) => {
       },
       { new: true },
     );
+
+    
 
     res.json(call);
   } catch (err) {

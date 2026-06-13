@@ -231,6 +231,8 @@ const CallUI = ({
   formatDuration,
   controls,
   dragHandlers,
+  callStarted,
+  ringingTimeLeft,  
 }) => {
   const { myVideo, userVideo, userAudio, callContainerRef } = refs;
 
@@ -400,6 +402,26 @@ const CallUI = ({
           <button onClick={() => controls.setIsMinimized(!isMinimized)}>
             {isMinimized ? "⬜ Agrandir" : "➖ Réduire"}
           </button>
+        </div>
+      )}
+
+      {!callStarted && currentCallUser && (
+        <div
+          style={{
+            position: "absolute",
+            top: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0,0,0,0.7)",
+            color: "white",
+            padding: "10px 20px",
+            borderRadius: "20px",
+            textAlign: "center",
+            zIndex: 999,
+          }}
+        >
+          📞 Sonnerie...
+          <br />⏳ {ringingTimeLeft}s
         </div>
       )}
 

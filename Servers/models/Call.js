@@ -22,7 +22,7 @@ const CallSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["missed", "accepted", "rejected", "ended"],
+      enum: ["ringing", "accepted", "rejected", "missed", "ended"],
       default: "ended",
     },
 
